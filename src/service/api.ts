@@ -1,5 +1,5 @@
 import localStorage from "./localStorage";
-import md5 from "blueimp-md5";
+import {MD5} from "crypto-js";
 import {
   EConfigKey,
   DataResult,
@@ -9,9 +9,13 @@ import {
 import { PPF } from "./public";
 import "./favicon";
 
+// limit the number of concurrent connections to 8
+import pLimit from 'p-limit';
+const limit = pLimit(8);
+
 let rootPath = "";
 let isExtensionMode = false;
-const isDebugMode = process.env.NODE_ENV === "development";
+const isDebugMode = import.meta.env.DEV;
 // 检测浏览器当前状态和模式
 try {
   let runtime = chrome.runtime as any;
@@ -78,7 +82,7 @@ export const APP = {
      */
     get(key: string): string | null {
       if (this.contents) {
-        return this.contents[md5(key)];
+        return this.contents[MD5(key).toString()];
       }
       return null;
     },
@@ -88,7 +92,7 @@ export const APP = {
      * @param content
      */
     set(key: string, content: string) {
-      this.contents[md5(key)] = content;
+      this.contents[MD5(key).toString()] = content;
       this.contents["update"] = new Date().getTime();
       this.contents["expires"] = new Date().getTime() + this.expires;
       this.localStorage.set(this.cacheKey, this.contents);
@@ -257,18 +261,29 @@ export const APP = {
    * 异步获取脚本内容
    * @param path 路径
    */
-  getScriptContent(path: string): JQueryXHR {
-    let url = `${API.host}/${path}`;
-    // 外部链接
-    if (path.substr(0, 4) === "http") {
-      url = path;
-    } else {
-      url = url.replace("resource//", "resource/");
-    }
-    APP.debugMode && console.log("getScriptContent", url);
-    return $.ajax({
-      url,
-      dataType: "text"
+  getScriptContent(path: string): Promise<string> {
+    return limit(() => {
+      return new Promise((resolve, reject) => {
+        let url = `${API.host}/${path}`;
+        // 外部链接
+        if (path.substr(0, 4) === "http") {
+          url = path;
+        } else {
+          url = url.replace("resource//", "resource/");
+        }
+        APP.debugMode && console.log("getScriptContent", url);
+        $.ajax({
+          url,
+          dataType: "text",
+          timeout: 30000 // Set timeout to 30 seconds (30000 milliseconds)
+        })
+          .done((result) => {
+            resolve(result);
+          })
+          .fail((jqXHR, status, text) => {
+            reject(status + ", " + text);
+          });
+      });
     });
   },
   /**
@@ -285,7 +300,6 @@ export const APP = {
 
   /**
    * 显示系统提示信息
-   * @param options
    */
   showNotifications(
     options: chrome.notifications.NotificationOptions,
@@ -295,7 +309,7 @@ export const APP = {
   },
   getInstallType(): Promise<any> {
     return new Promise<any>((resolve?: any, reject?: any) => {
-      if (chrome && chrome.management) {
+      if (chrome?.management) {
         chrome.management.getSelf(result => {
           // 判断是否为 crx 方式
           if (

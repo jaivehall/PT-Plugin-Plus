@@ -1,12 +1,13 @@
 {
-    "name": "kamept ",
+    "name": "kamept",
     "timezoneOffset": "+0800",
     "description": "kamept",
     "url": "https://kamept.com/",
     "icon": "https://kamept.com/favicon.ico",
-    "tags": [],
+    "tags": ["成人", "COS"],
     "schema": "NexusPHP",
     "host": "kamept.com",
+    "getInfoAjaxCache": true,
     "collaborator": [
         "koal",
         "amorphobia",

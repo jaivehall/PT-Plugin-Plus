@@ -12,7 +12,9 @@
     "影视"
   ],
   "collaborator": [
-    "jinglekang"
+    "jinglekang",
+    "hui-shao",
+    "EasonWong"
   ],
   "levelRequirements": [
     {
@@ -67,7 +69,7 @@
       "downloaded": "1TB",
       "ratio": "3.55",
       "seedingPoints": "600000",
-      "privilege": "可可以更新过期的外部信息；可以查看Extreme User论坛。"
+      "privilege": "可以更新过期的外部信息；可以查看Extreme User论坛。"
     },
     {
       "level": "7",
@@ -241,22 +243,6 @@
           "filters": [
             "query.next().text().split(' (')[0].trim()",
             "dateTime(query).isValid()?dateTime(query).valueOf():query"
-          ]
-        }
-      }
-    },
-    "bonusExtendInfo": {
-      "prerequisites": "!user.bonusPerHour",
-      "page": "/mybonus.php",
-      "fields": {
-        "bonusPerHour": {
-          "selector": [
-            "div:contains('你当前每小时能获取'):last",
-            "div:contains('You are currently getting'):last",
-            "div:contains('你當前每小時能獲取'):last"
-          ],
-          "filters": [
-            "parseFloat(query.text().match(/[\\d.]+/)[0])"
           ]
         }
       }

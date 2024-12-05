@@ -417,7 +417,8 @@ export enum ERestoreContent {
 
 export enum EBrowserType {
   Chrome = "Chrome",
-  Firefox = "Firefox"
+  Firefox = "Firefox",
+  Edge = "Edge"
 }
 
 export enum EWorkingStatus {
@@ -446,3 +447,21 @@ export enum ERestoreError {
   needSecretKey = "needSecretKey",
   errorSecretKey = "errorSecretKey"
 }
+
+export enum ETagType {
+  all = "__all__",
+  unTagged = "__unTagged__",
+  unReadMsg = "__unReadMsg__",
+  statusError = "__statusError__",
+}
+
+export enum EOpenType {
+  openAllSites = "openAllSites",
+  openAllUnReadMsg = "openAllUnReadMsg",
+  openAllStatusErr = "openAllStatusErr",
+}
+
+export enum EAlarm {
+  refreshJob = 'PTPP_RefreshUserData_JOB'
+}
+

@@ -1,8 +1,8 @@
-import md5 from "blueimp-md5";
 import * as basicContext from "basiccontext";
 import { Options, Site, Dictionary } from "@/interface/common";
 import dayjs from "dayjs";
 import { UAParser } from "ua-parser-js";
+import {MD5} from "crypto-js";
 
 class HelpFunctions {
   public isExtensionMode: boolean = false;
@@ -106,7 +106,7 @@ class HelpFunctions {
    * 获取一个编号
    */
   public getNewId(): string {
-    return md5(
+    return MD5(
       new Date().getTime().toString() + this.getRandomString()
     ).toString();
   }
@@ -267,7 +267,7 @@ class HelpFunctions {
    */
   public checkPermissions(permissions: string[]): Promise<any> {
     return new Promise<any>((resolve?: any, reject?: any) => {
-      if (chrome && chrome.permissions) {
+      if (chrome?.permissions) {
         // 查询当前权限
         chrome.permissions.contains(
           {
@@ -297,7 +297,7 @@ class HelpFunctions {
    */
   public requestPermissions(permissions: string[]): Promise<any> {
     return new Promise<any>((resolve?: any, reject?: any) => {
-      if (chrome && chrome.permissions) {
+      if (chrome?.permissions) {
         chrome.permissions.request(
           {
             permissions: permissions
@@ -367,14 +367,15 @@ class HelpFunctions {
       sites.push(...options.sites);
     }
 
-    if (options.system && options.system.publicSites) {
+    if (options.system?.publicSites) {
       sites.push(...options.system.publicSites);
     }
 
     let site = sites.find((item: Site) => {
-      let cdn = [item.url].concat(item.cdn, item.formerHosts?.map(x => `//${x}`));
+      let cdn = [item.url].concat(item.cdn, item.apiCdn, item.formerHosts?.map(x => `//${x}`));
       return item.host == host || cdn.join("").indexOf(`//${host}`) > -1;
     });
+
 
     if (site) {
       return this.clone(site);
@@ -454,6 +455,84 @@ class HelpFunctions {
     let datetime = dayjs(result).format("YYYY-MM-DDTHH:mm:ss");
     result = new Date(`${datetime}${timezoneOffset}`).getTime();
     return result;
+  }
+
+  /**
+   * @see https://nodejs.org/api/url.html#url_url_resolve_from_to
+   */
+  public resolveURL(from: string, to: string) {
+    const resolvedUrl = new URL(to, new URL(from, 'resolve://'));
+    if (resolvedUrl.protocol === 'resolve:') {
+      // `from` is a relative URL.
+      const { pathname, search, hash } = resolvedUrl;
+      return pathname + search + hash;
+    }
+    return resolvedUrl.toString();
+  }
+
+  public getIdFromMTURL(url: string) {
+    try {
+      let id = new URL(url).pathname.split('/').pop()
+      if (id) {
+        parseInt(id)
+        return id
+      }
+    } catch (error) {
+      console.log('getIdFromMTURL error', error)
+    }
+    return undefined
+  }
+
+  /**
+   * activeURL 这个字段可能不存在,,,
+   * 比如右键种子发送到 PTPP, 按正常逻辑筛选一遍
+   */
+  public getSiteActiveUrl(site: Site) {
+    if (site.apiCdn && site.apiCdn.length > 0) return site.apiCdn[0]
+    if (site.activeURL) return site.activeURL
+    if (site.cdn && site.cdn.length > 0) return site.cdn[0]
+    return site.url
+  }
+
+  /**
+   * 解析 mt 下载链接
+   * @param id 种子 id
+   * @param showNotice 是否显示提示
+   * @param site 站点信息
+   */
+  public resolveMTDownloadURL(id: String, site: Site, showNotice: any = undefined) {
+    let activeURL = this.getSiteActiveUrl(site)
+    // @ts-ignore
+    let res = $.ajax(this.resolveURL(activeURL, '/api/torrent/genDlToken'), {
+        method: 'POST',
+        data: {id},
+        cache: true,
+        headers: {
+          "x-api-key": site.authToken
+        },
+        success: function (data) {
+          if (data.code === '0') {
+            console.log(`种子 ${id} 下载链接获取成功`, data)
+            // return data.data
+          } else {
+            let msg = `种子 ${id} 下载链接获取失败, code != 0`
+            console.log(msg, data)
+            if (showNotice) {
+              showNotice({msg})
+            }
+            // return null
+          }
+        },
+        error: function (data) {
+          let msg = `种子 ${id} 下载链接获取失败`
+          console.log(msg, data)
+          if (showNotice) {
+            showNotice({msg})
+          }
+        },
+        async: false
+      })
+      return res.responseJSON.data || ''
   }
 }
 

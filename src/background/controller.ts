@@ -27,7 +27,8 @@ import { APP } from "@/service/api";
 import URLParse from "url-parse";
 import { User } from "./user";
 import { MovieInfoService } from "@/service/movieInfoService";
-import parseTorrent from "parse-torrent";
+import {remote as parseTorrentRemote} from "parse-torrent";
+import {PPF} from "@/service/public";
 
 type Service = PTPlugin;
 export default class Controller {
@@ -259,17 +260,21 @@ export default class Controller {
     let URL = Filters.parseURL(downloadOptions.url);
     let downloadHost = URL.host;
     let siteConfig = this.getSiteFromHost(downloadHost);
+    console.log("doDownload", clientConfig, downloadOptions, host, siteConfig)
     return new Promise((resolve?: any, reject?: any) => {
       clientConfig.client
         .call(EAction.addTorrentFromURL, {
           url: downloadOptions.url,
-          savePath: downloadOptions.savePath,
+          savePath: downloadOptions.savePath !== undefined && downloadOptions.savePath.includes(',') ? downloadOptions.savePath.split(',')[0] : downloadOptions.savePath,
           autoStart:
             downloadOptions.autoStart === undefined
               ? false
               : downloadOptions.autoStart,
+          category: downloadOptions.savePath !== undefined && downloadOptions.savePath.includes(',') ? downloadOptions.savePath.split(',')[1] : null,
           imdbId: downloadOptions.tagIMDb ? downloadOptions.imdbId : null,
           upLoadLimit: siteConfig !== undefined ? siteConfig.upLoadLimit : null,
+          clientOptions: clientConfig.options,
+          siteConfig,
         })
         .then((result: any) => {
           this.service.logger.add({
@@ -471,7 +476,7 @@ export default class Controller {
    */
   public getSiteFromHost(host: string): Site {
     return this.options.sites.find((item: Site) => {
-      let cdn = [item.url].concat(item.cdn);
+      let cdn = [item.url].concat(item.cdn, item.apiCdn);
       return item.host == host || cdn.join("").indexOf(host) > -1;
     });
   }
@@ -884,6 +889,7 @@ export default class Controller {
    * @param options
    */
   public getTorrentDataFromURL(options: string | any): Promise<any> {
+    console.log("getTorrentDataFromURL", options)
     return new Promise<any>((resolve?: any, reject?: any) => {
       let url = "";
       if (typeof options === "string") {
@@ -899,6 +905,29 @@ export default class Controller {
       let requestMethod = ERequestMethod.GET;
       if (site) {
         requestMethod = site.downloadMethod || ERequestMethod.GET;
+        switch (site.name) {
+          case "M-Team":
+            let id = PPF.getIdFromMTURL(url)
+            console.log(`getTorrentDataFromURL.M-Team ${url} -> ${id}`, options)
+            if (id) {
+              if (parseInt(id)) {
+                let torrentURL = PPF.resolveMTDownloadURL(id, site)
+                console.log(`getTorrentDataFromURL.M-Team1 ${url} -> ${torrentURL}`, options)
+                url = torrentURL
+              } else {
+                console.log(`getTorrentDataFromURL.M-Team2 ${url}, id 链接可能已是直链, 不进行转换...`, options)
+              }
+            } else {
+              reject(APP.createErrorMessage(
+                  this.service.i18n.t("service.controller.invalidTorrent", {
+                    link: EWikiLink.faq
+                  })
+              ));
+            }
+            break
+          default:
+            break
+        }
       }
       let file = new FileDownloader({
         url,
@@ -913,7 +942,7 @@ export default class Controller {
           file.content &&
           /octet-stream|x-bittorrent/gi.test(file.content.type)
         ) {
-          parseTorrent.remote(file.content, (err, torrent) => {
+          parseTorrentRemote(file.content, (err, torrent) => {
             if (err) {
               console.log("parse.error", err);
               // 是否解析种子文件
@@ -966,13 +995,7 @@ export default class Controller {
    */
   public getSiteOptionsFromURL(url: string): Site | undefined {
     let host = new URLParse(url).host;
-    let site: Site =
-      this.options.system &&
-      this.options.system.sites &&
-      this.options.system.sites.find((item: Site) => {
-        return item.host == host;
-      });
-
+    let site: Site = this.getSiteFromHost(host);
     return site;
   }
 
@@ -1084,6 +1107,13 @@ export default class Controller {
   public resetUserDatas(datas: any) {
     return new Promise<any>((resolve?: any, reject?: any) => {
       this.service.userData.reset(datas);
+      setTimeout(() => {
+        this.service.userData.upgrade().then(r => {
+          console.log('升级站点数据完成')
+        }).catch(e => {
+          console.error('升级站点数据失败', e)
+        })
+      }, 1000)
       resolve();
     });
   }

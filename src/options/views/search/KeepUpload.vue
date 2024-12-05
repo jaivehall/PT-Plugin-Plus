@@ -66,7 +66,7 @@
                   >{{ $t("keepUploadTask.size")
                   }}{{ item.data.size | formatSize }},
                   {{ $t("keepUploadTask.fileCount")
-                  }}{{ item.torrent ? item.torrent.files.length : "N/A" }},
+                  }}{{ item.torrent ? item.torrent.filesLength : "N/A" }},
                   {{ $t("keepUploadTask.status.label")
                   }}{{ item.status }}</v-list-tile-sub-title
                 >
@@ -337,7 +337,7 @@ export default Vue.extend({
           status: this.$t("keepUploadTask.status.downloading").toString()
         });
         // requests.push(this.getTorrent(item.url, index));
-        this.getTorrent(item.url, index)
+        this.getTorrent(item, index)
           .then((result: any) => {
             this.verification(result, index);
           })
@@ -352,7 +352,7 @@ export default Vue.extend({
       this.verifiedItems[index].loading = true;
       this.verifiedItems[index].status = this.$t("keepUploadTask.status.downloading").toString();
 
-      this.getTorrent(this.verifiedItems[index].data.url, index)
+      this.getTorrent(this.verifiedItems[index].data, index)
         .then((result: any) => {
           this.verification(result, index);
         })
@@ -399,10 +399,7 @@ export default Vue.extend({
         }
 
         if (!item || !this.verifiedItems[0].verified) {
-          this.verifiedItems[index] = Object.assign(
-            this.verifiedItems[index],
-            result
-          );
+          this.$set(this.verifiedItems, index, { ...this.verifiedItems[index], ...result });
           return;
         }
 
@@ -425,7 +422,9 @@ export default Vue.extend({
           );
         }
 
-        result.torrent = torrent;
+        result.torrent = {
+          filesLength: torrent.files.length
+        };
         if (result.verified) {
           this.verifiedCount++;
         }
@@ -453,20 +452,36 @@ export default Vue.extend({
           }
         }
 
-        this.verifiedItems[index] = Object.assign(
-          this.verifiedItems[index],
-          result
-        );
+        this.$set(this.verifiedItems, index, { ...this.verifiedItems[index], ...result });
       }
     },
     /**
      * 获取种子文件内容
      */
-    getTorrent(url: string, index: number): Promise<any> {
+    getTorrent(item: SearchResultItem, index: number): Promise<any> {
+      if (item.url) {
+        switch (item.site.name) {
+          case "M-Team":
+            let id = item.url.replace(/^\D+/g, '');
+            console.log(`getTorrentDataFromURL.M-Team ${item.url} -> ${id}`);
+            if (id) {
+              if (parseInt(id)) {
+                let torrentURL = PPF.resolveMTDownloadURL(id, item.site);
+                console.log(`getTorrentDataFromURL.M-Team1 ${item.url} -> ${torrentURL}`);
+                item.url = torrentURL;
+              } else {
+                console.log(`getTorrentDataFromURL.M-Team2 ${item.url}, id 链接可能已是直链, 不进行转换...`);
+              }
+            }
+            break
+          default:
+            break
+        }
+      }
       return new Promise<any>((resolve?: any, reject?: any) => {
         extension
           .sendRequest(EAction.getTorrentDataFromURL, null, {
-            url,
+            url: item.url,
             parseTorrent: true
           })
           .then(result => {

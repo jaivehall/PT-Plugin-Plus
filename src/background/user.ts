@@ -36,18 +36,18 @@ export class User {
           return false;
         }
 
+
         if (!failedOnly) {
           requests.push(this.getUserInfo(site, true));
-        } else if (
-          site.user &&
-          ((site.user.lastUpdateStatus &&
-            [
-              EUserDataRequestStatus.needLogin,
-              EUserDataRequestStatus.unknown
-            ].includes(site.user.lastUpdateStatus)) ||
-            !site.user.lastUpdateStatus)
-        ) {
-          requests.push(this.getUserInfo(site, true));
+        } else {
+          if (site.user) {
+            let enumStatus = [EUserDataRequestStatus.needLogin, EUserDataRequestStatus.unknown]
+            // @ts-ignore
+            let lastUpdateStatus = enumStatus.includes(site.user.lastUpdateStatus)
+            if ((site.user.lastUpdateStatus && lastUpdateStatus) || !site.user.lastUpdateStatus) {
+              requests.push(this.getUserInfo(site, true))
+            }
+          }
         }
       });
 
@@ -63,6 +63,10 @@ export class User {
   }
 
   private getSiteURL(site: Site) {
+    if (site.apiCdn && site.apiCdn.length > 0) {
+      return site.apiCdn[0];
+    }
+
     if (site.cdn && site.cdn.length > 0) {
       return site.cdn[0];
     }
@@ -112,12 +116,12 @@ export class User {
       }
 
       // 获取用户基本信息（用户名、ID、是否登录等）
-      this.getInfos(host, url, rule)
+      this.getInfos(host, url, rule, site)
         .then((result: any) => {
           console.log("userBaseInfo", host, result);
           userInfo = Object.assign({}, result);
           // 是否已定义已登录选择器
-          if (rule && rule.fields && rule.fields.isLogged) {
+          if (rule?.fields?.isLogged) {
             // 如果已定义则以选择器匹配为准
             if (userInfo.isLogged && (userInfo.name || userInfo.id)) {
               userInfo.isLogged = true;
@@ -145,6 +149,8 @@ export class User {
 
           if (!rule) {
             this.updateStatus(site, userInfo);
+            // 未定义扩展信息规则时，直接设置完成并返回
+            userInfo.lastUpdateStatus = EUserDataRequestStatus.success;
             resolve(userInfo);
             return;
           }
@@ -210,7 +216,7 @@ export class User {
         let host = site.host as string;
         let rule = this.service.getSiteSelector(site, name);
 
-        if (rule) {
+        if (rule&&rule.page) {
           let url = `${this.getSiteURL(site)}${rule.page
             .replace("$user.id$", userInfo.id)
             .replace("$user.name$", userInfo.name)
@@ -245,7 +251,7 @@ export class User {
           .then((results: any[]) => {
             results.forEach((result: any) => {
               userInfo = Object.assign(userInfo, result);
-
+              console.log(userInfo );
               userInfo.lastUpdateStatus = EUserDataRequestStatus.success;
               this.updateStatus(site, userInfo);
             });
@@ -283,7 +289,15 @@ export class User {
           for (const key in requestData) {
             if (requestData.hasOwnProperty(key)) {
               const value = requestData[key];
-              requestData[key] = PPF.replaceKeys(value, userInfo, "user");
+              if (value && typeof value === 'object') {
+                for (const innerKey  in value){
+                  const value1 = value[innerKey];
+                  value[innerKey] = PPF.replaceKeys(value1, userInfo, "user");
+                }
+                requestData[key] = value;
+              }else{
+                requestData[key] = PPF.replaceKeys(value, userInfo, "user");
+              }
             }
           }
         } catch (error) {
@@ -297,6 +311,18 @@ export class User {
             if (headers.hasOwnProperty(key)) {
               const value = headers[key];
               headers[key] = PPF.replaceKeys(value, userInfo, "user");
+            }
+          }
+        } catch (error) {
+          console.log(error);
+        }
+      }
+      if (headers && site) {
+        try {
+          for (const key in headers) {
+            if (headers.hasOwnProperty(key)) {
+              const value = headers[key];
+              headers[key] = PPF.replaceKeys(value, site, "site");
             }
           }
         } catch (error) {
@@ -318,9 +344,11 @@ export class User {
         url,
         method: rule.requestMethod || ERequestMethod.GET,
         dataType: "text",
-        data: requestData,
+        data: rule.requestContentType == "application/json" ? JSON.stringify(requestData) : requestData,
+        contentType: rule.requestContentType == "application/json" ? "application/json" : "application/x-www-form-urlencoded",
         headers: rule.headers,
-        timeout: this.service.options.connectClientTimeout || 30000
+        timeout: this.service.options.connectClientTimeout || 30000,
+        cache: (site?.getInfoAjaxCache) ? site?.getInfoAjaxCache : false 
       })
         .done(result => {
           this.removeQueue(host, url);
@@ -411,9 +439,11 @@ export class User {
     if (script) {
       eval(script);
     } else {
-      APP.getScriptContent(path).done(script => {
+      APP.getScriptContent(path).then(script => {
         this.infoParserCache[path] = script;
         eval(script);
+      }).catch(error => {
+        console.error("Error loading script:", error);
       });
     }
   }

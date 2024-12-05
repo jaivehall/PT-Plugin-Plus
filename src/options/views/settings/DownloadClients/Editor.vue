@@ -35,6 +35,11 @@
           ></v-text-field>
 
           <v-switch
+              :label="$t('settings.downloadClients.editor.enabled')"
+              v-model="option.enabled"
+          ></v-switch>
+
+          <v-switch
             :label="$t('settings.downloadClients.editor.autoStart')"
             v-model="option.autoStart"
             v-if="['transmission', 'qbittorrent'].includes(option.type)"
@@ -45,6 +50,32 @@
             v-model="option.tagIMDb"
             v-if="['qbittorrent'].includes(option.type)"
           ></v-switch>
+
+          <!--站点 host 作为 qb 标签-->
+          <v-switch
+              :label="$t('settings.downloadClients.editor.hostnameAsTag')"
+              v-model="option.hostnameAsTag"
+          ></v-switch>
+          <!--站点名 作为 qb 标签-->
+          <v-switch
+              :label="$t('settings.downloadClients.editor.siteNameAsTag')"
+              v-model="option.siteNameAsTag"
+          ></v-switch>
+          <!--启用 qb 分类-->
+          <v-switch
+              :label="$t('settings.downloadClients.editor.enableCategory')"
+              v-model="option.enableCategory"
+          ></v-switch>
+          <!--自定义分类列表-->
+          <v-textarea v-if="option.enableCategory" v-model="categoryText"
+              :label="$t('settings.downloadClients.editor.enableCategoryText')"
+              :hint="$t('settings.downloadClients.editor.enableCategoryTextTip')"
+          ></v-textarea>
+          <!--自定义标签列表-->
+          <v-text-field v-model="customTagText"
+              :label="$t('settings.downloadClients.editor.customTagText')"
+              :hint="$t('settings.downloadClients.editor.customTagTextTip')"
+          ></v-text-field>
 
           <v-text-field
             :value="option.type"
@@ -86,15 +117,16 @@
 </template>
 
 <script lang="ts">
-import md5 from "blueimp-md5";
 import Vue from "vue";
 import Extension from "@/service/extension";
-import { EAction, DataResult, Dictionary } from "@/interface/common";
+import {EAction, DataResult, Dictionary, QbCategory} from "@/interface/common";
 const extension = new Extension();
 export default Vue.extend({
   data() {
     return {
       showPassword: false,
+      categoryText: '',
+      customTagText: '',
       rules: {
         require: [(v: any) => !!v || "!"],
         url: (v: any) => {
@@ -132,6 +164,21 @@ export default Vue.extend({
     option: Object
   },
   watch: {
+    option() {
+      console.log(`watch option`, this.option)
+      let qbCategories: QbCategory[] = this.option.qbCategories || [];
+      let customTags: QbCategory[] = this.option.customTags || [];
+      this.categoryText = qbCategories.map(c => `${c.name},${c.path}`).join('\n')
+      this.customTagText = customTags.join(',')
+    },
+    categoryText() {
+      this.option.qbCategories = this.categoryText.split(/\n/).filter(_ => !!_)
+          .map(_ => _.split(/\s*[,，]\s*/)).filter(([name, path]) => !!name && !!path)
+          .map(([name, path]) => ({name, path}))
+    },
+    customTagText() {
+      this.option.customTags = this.customTagText.split(/\s*[,，]\s*/).filter(_ => !!_)
+    },
     successMsg() {
       this.haveSuccess = this.successMsg != "";
     },

@@ -12,6 +12,17 @@
           :rules="rules.require"
         ></v-text-field>
 
+        <!--&lt;!&ndash;站点分组&ndash;&gt;-->
+        <!--<v-combobox-->
+        <!--    v-model="site.siteGroups"-->
+        <!--    hide-selected-->
+        <!--    :hint="$t('settings.sites.editor.siteGroup')"-->
+        <!--    :label="$t('settings.sites.editor.siteGroupTip')"-->
+        <!--    multiple-->
+        <!--    persistent-hint-->
+        <!--    small-chips-->
+        <!--&gt;</v-combobox>-->
+
         <!-- 标签 -->
         <v-combobox
           v-model="site.tags"
@@ -101,6 +112,13 @@
           :hint="$t('settings.sites.editor.cdnTip')"
         ></v-textarea>
 
+        <v-textarea
+          v-model="apiCdn"
+          :label="$t('settings.sites.editor.apiCdn')"
+          value
+          :hint="$t('settings.sites.editor.cdnTip')"
+        ></v-textarea>
+
         <!-- 时区 -->
         <v-autocomplete
           v-model="site.timezoneOffset"
@@ -136,11 +154,23 @@
           </template>
         </v-autocomplete>
 
+        <!--上传限速-->
         <v-text-field
-                v-model="site.upLoadLimit"
+                v-model="site.upLoadLimit" type="number"
                 :label="$t('settings.sites.editor.upLoadLimit')"
                 :placeholder="$t('settings.sites.editor.upLoadLimitTip')"
         ></v-text-field>
+        <!--token-->
+        <v-text-field
+                v-model="site.authToken"
+                :disabled="!site.tokenRequired" :rules="site.tokenRequired ? rules.require : []"
+                :label="$t('settings.sites.editor.authToken')"
+                :placeholder="site.tokenTip ? site.tokenTip : $t('settings.sites.editor.authTokenTip')"
+        ></v-text-field>       
+
+        <!-- 站点已离线（停机/关闭） -->
+        <v-switch :label="$t('settings.sites.editor.offline')" v-model="site.offline" />
+
         <!-- 允许获取用户信息 -->
         <v-switch
           :label="$t('settings.sites.editor.allowGetUserInfo')"
@@ -173,11 +203,26 @@
           </v-container>
         </template>
 
-        <!-- 站点已离线（停机/关闭） -->
-        <v-switch :label="$t('settings.sites.editor.offline')" v-model="site.offline"></v-switch>
+        <!-- 禁用搜索替换  -->
+        <v-switch
+          v-model="site.disableSearchTransform"
+          :disabled="!site.allowSearch || site.offline"
+          :label="$t('settings.sites.editor.disableSearchTransform')"
+        />
 
         <!-- 消息提醒开关 -->
         <v-switch :label="$t('settings.sites.editor.disableMessageCount')" v-model="site.disableMessageCount"></v-switch>
+        <!--启用快捷链接-->
+        <v-switch :label="$t('settings.sites.editor.enableQuickLink')" v-model="site.enableQuickLink"/>
+        <!--启用默认链接-->
+        <v-switch :label="$t('settings.sites.editor.enableDefaultQuickLink')" :disabled="!site.enableQuickLink"
+                  v-model="site.enableDefaultQuickLink"/>
+        <!--自定义快捷链接列表-->
+        <v-textarea
+            v-model="quickLinkText" :disabled="!site.enableQuickLink"
+            :label="$t('settings.sites.editor.quickLinkText')"
+            :hint="$t('settings.sites.editor.quickLinkTextTip')"
+        ></v-textarea>
       </v-form>
     </v-card-text>
   </v-card>
@@ -200,6 +245,8 @@ export default Vue.extend({
         }
       },
       cdn: "",
+      apiCdn: "",
+      quickLinkText: "",
       valid: false,
       site: {} as Site,
       timezone: [
@@ -343,6 +390,19 @@ export default Vue.extend({
         } else {
           this.cdn = "";
         }
+
+        
+        if (this.site.apiCdn) {
+          this.apiCdn = this.site.apiCdn.join("\n");
+        } else {
+          this.apiCdn = "";
+        }
+
+        if (this.site.userQuickLinks) {
+          this.quickLinkText = this.site.userQuickLinks.map(u => `${u.desc},${u.href},${u.color ? u.color : ''}`).join('\n')
+        } else {
+          this.quickLinkText = ""
+        }
         this.$emit("change", {
           data: this.site,
           valid: this.valid
@@ -370,6 +430,33 @@ export default Vue.extend({
       }
 
       this.site.cdn = result;
+    },
+    apiCdn() {
+      let items = this.apiCdn.split("\n");
+      let result: string[] = [];
+      items.forEach(apiCdn => {
+        if (
+          /(https?):\/\/[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]/.test(
+            apiCdn
+          )
+        ) {
+          result.push(apiCdn);
+        }
+      });
+      this.site.apiCdn = result;
+    },
+    quickLinkText() {
+      this.site.userQuickLinks = this.quickLinkText.split(/\n/).filter(_ => !!_)
+          .map(_ => _.split(/\s*[,，]\s*/)).filter(([desc, href, color]) => {
+            let b1 = !!desc && !!href
+            let b2 = true
+            try {
+              new URL(href)
+            } catch (e) {
+              b2 = false
+            }
+            return b1 && b2
+          }).map(([desc, href, color]) => ({desc, href, color}))
     },
     initData() {
       if (this.initData) {

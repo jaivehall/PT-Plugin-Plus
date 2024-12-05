@@ -151,7 +151,7 @@ class PTPContent {
     }
 
     let site = sites.find((item: Site) => {
-      let cdn = [item.url].concat(item.cdn);
+      let cdn = [item.url].concat(item.cdn, item.apiCdn);
       return item.host == host || cdn.join("").indexOf(`//${host}`) > -1;
     });
 
@@ -201,12 +201,11 @@ class PTPContent {
             });
         } else {
           let site =
-            this.options.system &&
-            this.options.system.sites &&
+            this.options.system?.sites &&
             this.options.system.sites.find((item: Site) => {
               return item.host == this.site.host;
             });
-          if (site && site.schema && typeof site.schema !== "string") {
+          if (site?.schema && typeof site.schema !== "string") {
             this.schema = site.schema;
             this.schema.siteOnly = true;
           }
@@ -752,7 +751,8 @@ class PTPContent {
       if (e.target.tagName == "A") {
         let data = {
           url: e.target.getAttribute("href"),
-          title: e.target.getAttribute("title")
+          // fix: 修复 mt 拖放时无法获取到title的问题
+          title: e.target.getAttribute("title") || e.target.querySelector('.ant-tooltip-open')?.innerText || e.target.innerText
         };
         e.dataTransfer.setData("text/plain", JSON.stringify(data));
       }
@@ -1021,6 +1021,16 @@ class PTPContent {
     }
 
     return this.infoParser.getFieldData(content, selector, this.pageSelector);
+  }
+
+  public resolveMTDownloadURL(id: String, showNotice: boolean = true, site: Site = this.site) {
+    if (!site.authToken) return this.showNotice({msg: "未设置AuthToken，请先设置AuthToken", type: "error"})
+    if (!id) return this.showNotice({msg: "种子 id 不能为空", type: "error"})
+    if (showNotice) {
+      return PPF.resolveMTDownloadURL(id, this.site, this.showNotice)
+    } else {
+      return PPF.resolveMTDownloadURL(id, this.site)
+    }
   }
 }
 

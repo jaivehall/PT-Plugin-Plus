@@ -89,7 +89,7 @@ class Config {
     ],
     searchSolutions: [],
     navBarIsOpen: true,
-    showMoiveInfoCardOnSearch: true,
+    showMovieInfoCardOnSearch: true,
     beforeSearchingOptions: {
       getMovieInformation: true,
       maxMovieInformationCount: 5,
@@ -133,21 +133,32 @@ class Config {
     return new Promise<any>((resolve?: any, reject?: any) => {
       let urls: string[] = [];
       this.sites.forEach((site: Site) => {
+        /**
+         * 这里不写 icon 地址也可以，因为会自动获取
+         * @see Favicon.cacheFromIndex
+         */
         urls.push(site.activeURL || site.url || "");
       });
 
       if (this.options.sites) {
         this.options.sites.forEach((site: Site) => {
+          /**
+           * 这里不写 icon 地址也可以，因为会自动获取
+           * @see Favicon.cacheFromIndex
+           */
           urls.push(site.activeURL || site.url || "");
         });
       }
 
+      // 去重
+      urls = [...new Set(urls)]
       this.favicon
         .gets(urls)
         .then((results: any[]) => {
           results.forEach((result: any) => {
             let site = this.options.sites.find((item: Site) => {
-              let cdn = [item.url].concat(item.cdn, item.formerHosts?.map(x => `//${x}`));
+              let cdn = [item.url].concat(item.cdn);
+              cdn = cdn.concat(item.formerHosts?.map(x => `//${x}`)).filter(_ => !!_)
               return (
                 item.host == result.host ||
                 cdn.join("").indexOf(`//${result.host}`) > -1
@@ -500,14 +511,14 @@ class Config {
             console.log("upgradeSites.site", site, newHost);
             site.host = newHost;
             site.url = systemSite.url;
-            
+
             // 设置默认图标
             if (!systemSite.icon && !site.icon)
               site.icon = site.url + "/favicon.ico"
             else
               site.icon = systemSite.icon;
           }
-          
+
           // 更新搜索方案
           if (this.options.searchSolutions) {
             this.options.searchSolutions.forEach(
@@ -1049,7 +1060,7 @@ class Config {
    * @param server
    */
   public backupToServer(server: IBackupServer): Promise<any> {
-    console.log("backupToServer", server);
+    console.log("backupToServer", server, this.options.backupServers);
     return new Promise<any>((resolve?: any, reject?: any) => {
       const time = dayjs().valueOf();
       const fileName = this.getNewBackupFileName();
